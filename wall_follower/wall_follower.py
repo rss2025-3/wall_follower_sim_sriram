@@ -43,8 +43,8 @@ class WallFollower(Node):
             10)
        
        self.prev_error = 0
-       self.kp = 17
-       self.kd = .2
+       self.kp = 1
+       self.kd = 1
 
    def new_scan(self, msg):
         angle_min = msg.angle_min
@@ -60,10 +60,10 @@ class WallFollower(Node):
         # Whether or not we're following left or right
         if self.SIDE == -1 :
             # right
-            coordinates = coordinates[10:40] # only want first half
+            coordinates = coordinates[140:340] # only want first half
         else:
             # left
-            coordinates = coordinates[70:80] # only want second half
+            coordinates = coordinates[640:840] # only want second half
         
         # Split the coordinates for line fitting
         x = [c[0] for c in coordinates]
@@ -71,15 +71,15 @@ class WallFollower(Node):
         slope, intercept = np.polyfit(x, y, 1)
 
         # just for line plotting
-        xs = [-2.5 + .1*i for i in range(50)]
-        ys = [slope*i + intercept for i in xs]
-        VisualizationTools.plot_line(xs, ys, self.pub_wall)
+        #xs = [-2.5 + .1*i for i in range(50)]
+        #ys = [slope*i + intercept for i in xs]
+        #VisualizationTools.plot_line(xs, ys, self.pub_wall)
         
         dist = abs(intercept)/math.sqrt(slope*slope+1)
         error = (self.DESIRED_DISTANCE + 0.0) - dist
         
-        if error < -0.5:
-            error = -0.01
+        #if error < -0.5:
+        #    error = -0.01
 
         drive_angle = -self.SIDE * (error * self.kp + (error - self.prev_error) * self.kd)
         speed = self.VELOCITY
