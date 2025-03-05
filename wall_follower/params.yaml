@@ -5,4 +5,5 @@ wall_follower:
     side: -1
     velocity: 2.0
     desired_distance: 0.5
-    lookahead_distance: 4.0
+      #lookahead_distance: 4.0
+    lookahead_distance: 2.0

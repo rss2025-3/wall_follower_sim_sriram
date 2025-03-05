@@ -48,7 +48,8 @@ class WallFollower(Node):
        
        #self.prev_error = 0
        self.prev_dist = 0.0
-       self.kp = 0.4
+       #self.kp = 0.4
+       self.kp = 0.5
        self.kd = 0.0
 
    def new_scan(self, msg):
@@ -63,9 +64,6 @@ class WallFollower(Node):
         # Converts LIDAR readings into cartesian coordinates
         coordinates = [(ranges[i] * math.cos(angles[i]), ranges[i] * math.sin(angles[i])) for i in range(len(ranges))]
         
-        
-        
-
         # Whether or not we're following left or right
         alpha_start = self.SIDE*(math.pi/2 - math.atan(self.START_DISTANCE/self.DESIRED_DISTANCE))
         alpha_end = self.SIDE*(math.pi/2 - math.atan(self.LOOKAHEAD_DISTANCE/self.DESIRED_DISTANCE))
@@ -100,10 +98,11 @@ class WallFollower(Node):
         error = (self.DESIRED_DISTANCE + 0.0) - dist
 
         #if (x_intercept > 0) and (x_intercept < 30):
-        #    error_wall = (1/x_intercept)*10
-        #    self.get_logger().info(f"{error_wall=}")
-#
-#            error = error + error_wall
+        if x_intercept > 0:
+            error_wall = (1/x_intercept)*3
+            self.get_logger().info(f"{error_wall=}")
+
+            error = error + error_wall
         
         drive_angle = -self.SIDE * (error * self.kp + (dist - self.prev_dist)/(0.025) * self.kd)
         speed = self.VELOCITY
