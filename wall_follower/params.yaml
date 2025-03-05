@@ -3,5 +3,6 @@ wall_follower:
     scan_topic: "/scan"
     drive_topic: "/vesc/high_level/input/nav_0" #"/drive"
     side: -1
-    velocity: 0.2
-    desired_distance: 0.6
+    velocity: 2.0
+    desired_distance: 0.5
+    lookahead_distance: 4.0

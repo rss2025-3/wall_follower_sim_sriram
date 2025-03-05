@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import numpy as np
 import rclpy
@@ -20,7 +21,7 @@ class WallFollower(Node):
        self.declare_parameter("side", rclpy.Parameter.Type.INTEGER)
        self.declare_parameter("velocity", rclpy.Parameter.Type.DOUBLE)
        self.declare_parameter("desired_distance", rclpy.Parameter.Type.DOUBLE)
-
+       self.declare_parameter("lookahead_distance", rclpy.Parameter.Type.DOUBLE)
 
        # Fetch constants from the ROS parameter server
        # This is necessary for the tests to be able to test varying parameters!
@@ -29,12 +30,15 @@ class WallFollower(Node):
        self.SIDE = self.get_parameter('side').get_parameter_value().integer_value
        self.VELOCITY = self.get_parameter('velocity').get_parameter_value().double_value
        self.DESIRED_DISTANCE = self.get_parameter('desired_distance').get_parameter_value().double_value
+       self.LOOKAHEAD_DISTANCE = self.get_parameter('lookahead_distance').get_parameter_value().double_value
+       self.START_DISTANCE = -0.2
       
        self.add_on_set_parameters_callback(self.parameters_callback)
        
        # TODO: Initialize your publishers and subscribers here
        self.pub_drive = self.create_publisher(AckermannDriveStamped, self.DRIVE_TOPIC, 10)
-       self.pub_wall = self.create_publisher(Marker, 'wall', 10)
+       self.pub_wall = self.create_publisher(Marker, 'wall_test', 10)
+       self.get_logger().info("IN THE CONSTRUCTOR")
        
        self.sub_laser = self.create_subscription(
             LaserScan,
@@ -42,9 +46,10 @@ class WallFollower(Node):
             self.new_scan,
             10)
        
-       self.prev_error = 0
-       self.kp = 1
-       self.kd = 1
+       #self.prev_error = 0
+       self.prev_dist = 0.0
+       self.kp = 0.4
+       self.kd = 0.0
 
    def new_scan(self, msg):
         angle_min = msg.angle_min
@@ -54,37 +59,56 @@ class WallFollower(Node):
         range_max = msg.range_max #   2.3550000190734863
         ranges = msg.ranges
         angles = [angle_min + angle_increment * i for i in range(len(ranges)+1)]
-        
+
         # Converts LIDAR readings into cartesian coordinates
         coordinates = [(ranges[i] * math.cos(angles[i]), ranges[i] * math.sin(angles[i])) for i in range(len(ranges))]
-        # Whether or not we're following left or right
-        if self.SIDE == -1 :
-            # right
-            coordinates = coordinates[140:340] # only want first half
-        else:
-            # left
-            coordinates = coordinates[640:840] # only want second half
         
+        
+        
+
+        # Whether or not we're following left or right
+        alpha_start = self.SIDE*(math.pi/2 - math.atan(self.START_DISTANCE/self.DESIRED_DISTANCE))
+        alpha_end = self.SIDE*(math.pi/2 - math.atan(self.LOOKAHEAD_DISTANCE/self.DESIRED_DISTANCE))
+
+        if self.SIDE == -1:
+            i_start = int((alpha_start - angle_min)/angle_increment)
+            i_end = int((alpha_end - angle_min)/angle_increment)
+        else:
+            i_end = int((alpha_start - angle_min)/angle_increment)
+            i_start = int((alpha_end - angle_min)/angle_increment)
+
+        coordinates = coordinates[i_start:i_end]
+
         # Split the coordinates for line fitting
         x = [c[0] for c in coordinates]
         y = [c[1] for c in coordinates]
         slope, intercept = np.polyfit(x, y, 1)
 
         # just for line plotting
-        #xs = [-2.5 + .1*i for i in range(50)]
-        #ys = [slope*i + intercept for i in xs]
-        #VisualizationTools.plot_line(xs, ys, self.pub_wall)
+        xs = [-2.5 + .1*i for i in range(50)]
+        ys = [slope*i + intercept for i in xs]
+        VisualizationTools.plot_line(xs, ys, self.pub_wall, frame="laser")
+        #VisualizationTools.plot_line([0., 1.], [0., 1.], self.pub_wall, frame="laser")
         
-        dist = abs(intercept)/math.sqrt(slope*slope+1)
-        error = (self.DESIRED_DISTANCE + 0.0) - dist
-        
-        #if error < -0.5:
-        #    error = -0.01
+        #dist = abs(intercept)/math.sqrt(slope*slope+1)
 
-        drive_angle = -self.SIDE * (error * self.kp + (error - self.prev_error) * self.kd)
+        dist = abs(slope*(self.START_DISTANCE*3 + self.LOOKAHEAD_DISTANCE)/4 + intercept)
+
+        x_intercept = max(-intercept/slope, 0)
+        
+        self.get_logger().info(f"Distance is: {dist}")
+        error = (self.DESIRED_DISTANCE + 0.0) - dist
+
+        #if (x_intercept > 0) and (x_intercept < 30):
+        #    error_wall = (1/x_intercept)*10
+        #    self.get_logger().info(f"{error_wall=}")
+#
+#            error = error + error_wall
+        
+        drive_angle = -self.SIDE * (error * self.kp + (dist - self.prev_dist)/(0.025) * self.kd)
         speed = self.VELOCITY
 
-        self.prev_error = error
+        self.prev_dist = dist
 
         drive_msg = AckermannDriveStamped()
         drive_msg.header.stamp = rclpy.time.Time().to_msg()
