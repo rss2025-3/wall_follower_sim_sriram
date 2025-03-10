@@ -49,7 +49,9 @@ class WallFollower(Node):
        #self.prev_error = 0
        self.prev_dist = 0.0
        #self.kp = 0.4
-       self.kp = 0.5
+       self.kp = 1.0
+       self.kp_wall = 3
+
        self.kd = 0.0
 
    def new_scan(self, msg):
@@ -63,6 +65,13 @@ class WallFollower(Node):
 
         # Converts LIDAR readings into cartesian coordinates
         coordinates = [(ranges[i] * math.cos(angles[i]), ranges[i] * math.sin(angles[i])) for i in range(len(ranges))]
+
+        # Front wall
+        #front_distance = np.mean(ranges[530:550])
+        if self.SIDE == 1:
+            front_distance = np.mean(ranges[540:580])
+        else:
+            front_distance = np.mean(ranges[500:540])
         
         # Whether or not we're following left or right
         alpha_start = self.SIDE*(math.pi/2 - math.atan(self.START_DISTANCE/self.DESIRED_DISTANCE))
@@ -88,23 +97,30 @@ class WallFollower(Node):
         VisualizationTools.plot_line(xs, ys, self.pub_wall, frame="laser")
         #VisualizationTools.plot_line([0., 1.], [0., 1.], self.pub_wall, frame="laser")
         
-        #dist = abs(intercept)/math.sqrt(slope*slope+1)
-
         dist = abs(slope*(self.START_DISTANCE*3 + self.LOOKAHEAD_DISTANCE)/4 + intercept)
 
-        x_intercept = max(-intercept/slope, 0)
+        if slope != 0:
+            x_intercept = max(-intercept/slope, 0)
+        else:
+            x_intercept = float("inf")
         
         self.get_logger().info(f"Distance is: {dist}")
         error = (self.DESIRED_DISTANCE + 0.0) - dist
 
-        #if (x_intercept > 0) and (x_intercept < 30):
-        if x_intercept > 0:
-            error_wall = (1/x_intercept)*3
-            self.get_logger().info(f"{error_wall=}")
+        error_wall = 0
+        #if (x_intercept < 10) and (x_intercept > 0):
+        wall_dist = 1.5
+        #if x_intercept > 0:
+        if front_distance < wall_dist:
 
-            error = error + error_wall
+            #error_wall = (1/x_intercept)
+            #error_wall = (1/front_distance) ** 2
+            error_wall = wall_dist - front_distance
+
+            self.get_logger().info(f"{error_wall=}")
         
-        drive_angle = -self.SIDE * (error * self.kp + (dist - self.prev_dist)/(0.025) * self.kd)
+        drive_angle = -self.SIDE * (error * self.kp + self.kp_wall * error_wall + (dist - self.prev_dist)/(0.025) * self.kd)
+        #drive_angle = -self.SIDE * (error * self.kp + (dist - self.prev_dist)/(0.025) * self.kd)
         speed = self.VELOCITY
 
         self.prev_dist = dist
@@ -115,6 +131,7 @@ class WallFollower(Node):
         drive_msg.drive.speed = float(speed)
         drive_msg.drive.steering_angle = float(drive_angle)
 
+        #drive_msg.drive.steering_angle = float(0)
         self.pub_drive.publish(drive_msg)
 
    def parameters_callback(self, params):
