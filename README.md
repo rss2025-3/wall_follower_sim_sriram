@@ -184,8 +184,6 @@ You generally should not modify these; they will be reset by the autograder.
 
 <br />
 
-Testing if I can push here - Ben
-
 #### If you don't see the car appearing in the rviz simulation:
 Firstly, confirm that the simulator (`ros2 launch racecar_simulator simulate.launch.xml`) is running successfully.
 
